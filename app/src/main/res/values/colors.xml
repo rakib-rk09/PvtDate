@@ -1,0 +1,7 @@
+<resources>
+    <color name="brand_green">#2fbf82</color>
+    <color name="ic_top">#4adea0</color>
+    <color name="ic_bottom">#0b6e4f</color>
+    <color name="splash_top">#041f16</color>
+    <color name="splash_bottom">#073a28</color>
+</resources>

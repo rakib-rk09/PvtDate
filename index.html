@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0b6e4f">
+    <meta name="color-scheme" content="light dark">
+    <meta name="application-name" content="PvtDate">
     <title>PvtDate</title>
     <script>
         (function () {
@@ -109,7 +112,7 @@
         .app {
             position: relative; z-index: 1;
             max-width: 480px; margin: 0 auto;
-            padding: 20px 16px 110px;
+            padding: calc(20px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(110px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
             min-height: 100vh;
         }
 
@@ -187,7 +190,7 @@
         .menu-btn svg { width: 22px; height: 22px; }
 
         .menu-overlay {
-            position: fixed; top: 96px; right: 16px; z-index: 90;
+            position: fixed; top: calc(96px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); z-index: 90;
             min-width: 176px; padding: 8px;
             background: var(--glass-bg);
             backdrop-filter: blur(26px) saturate(180%);
@@ -591,7 +594,7 @@
         .backdrop-switch { display: none; }
 
         .toast {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-60px);
+            position: fixed; top: calc(20px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%) translateY(-60px);
             background: rgba(11,110,79,0.95); color: white; padding: 12px 22px;
             border-radius: 16px; font-weight: 700; font-size: 14px; z-index: 100;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
@@ -713,7 +716,25 @@
     </div>
     <div class="glass setting-card">
         <div class="setting-title">About pvtdate</div>
-        <div class="setting-desc">pvtdate 1.0.0 — track your attendance for school and subjects. No account needed; your records are saved on this device.</div>
+        <div class="setting-desc">pvtdate <span id="appVersionLabel">1.1.0</span> — track your attendance for school and subjects. No account needed; your records are saved on this device.</div>
+    </div>
+    <div class="glass setting-card">
+        <div class="setting-head">
+            <div>
+                <div class="setting-title">App &amp; Updates</div>
+                <div class="setting-desc" id="updateDesc">Check for the latest version of pvtdate.</div>
+            </div>
+        </div>
+        <button class="logout-btn" id="checkUpdateBtn" style="border-color:rgba(74,222,160,0.3);background:rgba(74,222,160,0.12);color:#4adea0;margin:12px 0 0;">Check for updates</button>
+    </div>
+    <div class="glass setting-card">
+        <div class="setting-title">Backup &amp; Restore</div>
+        <div class="setting-desc">Export your attendance records. On Android you can save a backup file, or share it to another app.</div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+            <button class="logout-btn" id="backupBtn" style="border-color:rgba(74,222,160,0.3);background:rgba(74,222,160,0.12);color:#4adea0;flex:1;">Backup</button>
+            <button class="logout-btn" id="restoreBtn" style="border-color:rgba(94,160,255,0.3);background:rgba(94,160,255,0.12);color:#5ea0ff;flex:1;">Restore</button>
+        </div>
+        <input type="file" id="restoreFile" accept="application/json,.json" style="display:none">
     </div>
     <div class="glass setting-card">
         <div class="setting-title">Categories</div>
@@ -828,26 +849,46 @@
 
     const WEATHER_CITY = "Rangpur";
     let weatherLoaded = false;
+    let weatherAttempts = 0;
 
-    async function loadWeather() {
-        if (weatherLoaded) return;
-        weatherLoaded = true;
+    async function loadWeather(force) {
+        if (weatherLoaded && !force) return;
+        if (weatherAttempts >= 4) return;
+        weatherAttempts++;
+        const locEl = document.getElementById("weatherLoc");
+        const tempEl = document.getElementById("weatherTemp");
+        const emojiEl = document.getElementById("weatherEmoji");
+        locEl.textContent = WEATHER_CITY;
+        if (!force && tempEl.textContent !== "–") return;
+        tempEl.textContent = "…";
+        let controller = null;
+        let timer = null;
         try {
-            const res = await fetch("https://wttr.in/Rangpur?format=j1", { mode: "cors" });
+            if (typeof AbortController !== "undefined") {
+                controller = new AbortController();
+                timer = setTimeout(() => controller.abort(), 10000);
+            }
+            const res = await fetch("https://wttr.in/" + encodeURIComponent(WEATHER_CITY) + "?format=j1",
+                { mode: "cors", cache: "no-store", signal: controller ? controller.signal : undefined });
+            if (!res.ok) throw new Error("http " + res.status);
             const j = await res.json();
-            const temp = j.current_condition && j.current_condition[0];
-            const feels = temp ? temp.temp_C : null;
-            const desc = temp ? temp.weatherDesc[0].value : null;
-            if (feels !== null) {
-                document.getElementById("weatherTemp").textContent = feels + "°C";
-            }
-            if (desc) {
-                document.getElementById("weatherEmoji").textContent = weatherEmoji(desc);
-            }
+            const cur = j && j.current_condition && j.current_condition[0];
+            if (!cur) throw new Error("bad payload");
+            const feels = cur.temp_C;
+            if (feels !== undefined && feels !== null) tempEl.textContent = feels + "°C";
+            const desc = cur.weatherDesc && cur.weatherDesc[0] ? cur.weatherDesc[0].value : "";
+            if (desc) emojiEl.textContent = weatherEmoji(desc);
+            weatherLoaded = true;
         } catch (e) {
-            document.getElementById("weatherTemp").textContent = "–";
+            tempEl.textContent = "–";
+            weatherLoaded = false;
+        } finally {
+            if (timer) clearTimeout(timer);
         }
-        document.getElementById("weatherLoc").textContent = WEATHER_CITY;
+        locEl.textContent = WEATHER_CITY;
+        if (!weatherLoaded && weatherAttempts < 4) {
+            setTimeout(() => loadWeather(false), 15000 * weatherAttempts);
+        }
     }
 
     function weatherEmoji(desc) {
@@ -1384,31 +1425,41 @@
         loadAtt() {
             let main = {};
             try { main = JSON.parse(localStorage.getItem(this.key) || "{}"); } catch (e) { main = {}; }
+            if (!main || typeof main !== "object") main = {};
             try {
-                let changed = false;
+                const legacy = [];
                 for (let i = 0; i < localStorage.length; i++) {
                     const k = localStorage.key(i);
-                    if (k && k.indexOf(this.attPrefix) === 0 && k !== this.key) {
+                    if (k && k.indexOf(this.attPrefix) === 0 && k !== this.key) legacy.push(k);
+                }
+                if (legacy.length) {
+                    legacy.forEach(k => {
                         const val = localStorage.getItem(k);
                         if (val) {
                             try {
                                 const data = JSON.parse(val);
-                                Object.keys(data).forEach(d => {
-                                    if (!main[d]) main[d] = {};
+                                Object.keys(data || {}).forEach(d => {
+                                    if (!main[d] || typeof main[d] !== "object") main[d] = {};
                                     Object.keys(data[d] || {}).forEach(c => { main[d][c] = data[d][c]; });
                                 });
                             } catch (e) { /* ignore bad entries */ }
                         }
                         localStorage.removeItem(k);
-                        changed = true;
-                    }
+                    });
+                    this.saveAtt(main);
                 }
-                if (changed) this.saveAtt(main);
             } catch (e) { /* ignore */ }
             return main;
         },
         saveAtt(data) {
-            try { localStorage.setItem(this.key, JSON.stringify(data)); } catch (e) { /* ignore */ }
+            try {
+                localStorage.setItem(this.key, JSON.stringify(data));
+                const check = localStorage.getItem(this.key);
+                if (check === null) return false;
+                return true;
+            } catch (e) {
+                return false;
+            }
         },
         saveAll(payload) {
             const date = payload.date, items = payload.items;
@@ -1422,14 +1473,178 @@
                     data[date][cat] = st;
                 }
             });
-            this.saveAtt(data);
+            if (!this.saveAtt(data)) return { ok: false, error: "storage unavailable" };
             return { ok: true };
         },
     };
 
-    state.attendance = Store.loadAtt();
-    renderHero();
-    renderCategories();
+    const APP_VERSION = "1.1.0";
+    const REPO_URL = "https://github.com/rakib-rk09/PvtDate";
+    const RELEASES_URL = REPO_URL + "/releases";
+    const LATEST_APK_URL = REPO_URL + "/releases/latest/download/pvtdate.apk";
+    const bridge = (typeof window.PvtBridge !== "undefined") ? window.PvtBridge : null;
+
+    function setVersionLabel() {
+        const el = document.getElementById("appVersionLabel");
+        if (el) el.textContent = APP_VERSION;
+    }
+
+    function nativeVersion() {
+        try {
+            if (bridge && typeof bridge.version === "function") return String(bridge.version());
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
+    function cmpVersion(a, b) {
+        const pa = String(a).replace(/^v/i, "").split(".").map(n => parseInt(n, 10) || 0);
+        const pb = String(b).replace(/^v/i, "").split(".").map(n => parseInt(n, 10) || 0);
+        const len = Math.max(pa.length, pb.length);
+        for (let i = 0; i < len; i++) {
+            const x = pa[i] || 0, y = pb[i] || 0;
+            if (x > y) return 1;
+            if (x < y) return -1;
+        }
+        return 0;
+    }
+
+    async function checkForUpdates() {
+        const desc = document.getElementById("updateDesc");
+        const btn = document.getElementById("checkUpdateBtn");
+        if (desc) desc.textContent = "Checking…";
+        if (btn) btn.disabled = true;
+        let latest = null;
+        try {
+            const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+            const t = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+            const res = await fetch("https://api.github.com/repos/rakib-rk09/PvtDate/releases/latest",
+                { cache: "no-store", signal: ctrl ? ctrl.signal : undefined });
+            if (t) clearTimeout(t);
+            if (res.ok) {
+                const j = await res.json();
+                latest = j && (j.tag_name || j.name);
+            }
+        } catch (e) { /* offline or blocked */ }
+        if (btn) btn.disabled = false;
+        if (!latest) {
+            if (desc) desc.textContent = "Couldn't reach the update server. Tap to open the releases page.";
+            openReleases();
+            return;
+        }
+        const newer = cmpVersion(latest, APP_VERSION) > 0;
+        if (desc) desc.textContent = newer
+            ? "New version " + latest + " is available. Tap to download."
+            : "You're on the latest version (" + APP_VERSION + ").";
+        showToast(newer ? "Update available: " + latest : "You're up to date");
+        if (newer) downloadLatest();
+    }
+
+    function openReleases() {
+        if (bridge && typeof bridge.openUrl === "function") { try { bridge.openUrl(RELEASES_URL); return; } catch (e) {} }
+        window.open(RELEASES_URL, "_blank");
+    }
+
+    function downloadLatest() {
+        if (bridge && typeof bridge.downloadApk === "function") {
+            try { bridge.downloadApk(LATEST_APK_URL, "pvtdate.apk"); return; } catch (e) { /* fall through */ }
+        }
+        if (bridge && typeof bridge.openUrl === "function") { try { bridge.openUrl(LATEST_APK_URL); return; } catch (e) {} }
+        window.open(LATEST_APK_URL, "_blank");
+    }
+
+    function buildBackup() {
+        return JSON.stringify({
+            app: "pvtdate",
+            version: APP_VERSION,
+            exportedAt: new Date().toISOString(),
+            attendance: Store.loadAtt()
+        }, null, 2);
+    }
+
+    function backupData() {
+        const json = buildBackup();
+        const name = "pvtdate-backup-" + todayISO() + ".json";
+        if (bridge && typeof bridge.saveBackup === "function") {
+            try {
+                bridge.saveBackup(json, name);
+                showToast("Backup saved to Downloads");
+                return;
+            } catch (e) { /* fall through */ }
+        }
+        if (bridge && typeof bridge.shareText === "function") {
+            try { bridge.shareText(json, name); return; } catch (e) {}
+        }
+        try {
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+            showToast("Backup downloaded");
+        } catch (e) {
+            showToast("Backup failed");
+        }
+    }
+
+    function applyRestore(text) {
+        let parsed;
+        try { parsed = JSON.parse(text); } catch (e) { showToast("Invalid backup file"); return; }
+        const att = parsed && parsed.attendance;
+        if (!att || typeof att !== "object") { showToast("Invalid backup file"); return; }
+        const current = Store.loadAtt() || {};
+        let added = 0;
+        Object.keys(att).forEach(d => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+            const day = att[d];
+            if (!day || typeof day !== "object") return;
+            if (!current[d]) current[d] = {};
+            Object.keys(day).forEach(c => {
+                if (CATEGORIES.indexOf(c) >= 0 && ["present", "absent", "not_marked"].indexOf(day[c]) >= 0) {
+                    current[d][c] = day[c];
+                    added++;
+                }
+            });
+        });
+        if (!Store.saveAtt(current)) { showToast("Couldn't save restored data"); return; }
+        state.attendance = Store.loadAtt();
+        renderCategories();
+        renderHero();
+        showToast("Restored " + added + " records ✓");
+    }
+
+    setVersionLabel();
+    const _ver = nativeVersion();
+    if (_ver) { const el = document.getElementById("appVersionLabel"); if (el) el.textContent = _ver; }
+
+    const checkBtn = document.getElementById("checkUpdateBtn");
+    if (checkBtn) checkBtn.addEventListener("click", checkForUpdates);
+    const backupBtn = document.getElementById("backupBtn");
+    if (backupBtn) backupBtn.addEventListener("click", backupData);
+    const restoreBtn = document.getElementById("restoreBtn");
+    const restoreFile = document.getElementById("restoreFile");
+    if (restoreBtn && restoreFile) {
+        restoreBtn.addEventListener("click", () => restoreFile.click());
+        restoreFile.addEventListener("change", (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = () => applyRestore(String(reader.result || ""));
+            reader.onerror = () => showToast("Couldn't read file");
+            reader.readAsText(f);
+            restoreFile.value = "";
+        });
+    }
+
+    window.PVTDATE = { version: APP_VERSION, backup: backupData, checkForUpdates: checkForUpdates, _store: Store, _cmpVersion: cmpVersion };
+
+    try {
+        state.attendance = Store.loadAtt();
+        renderHero();
+        renderCategories();
+    } catch (e) {
+        if (bridge && typeof bridge.log === "function") { try { bridge.log("init error: " + e); } catch (_) {} }
+    }
 })();
     </script>
 </body>
