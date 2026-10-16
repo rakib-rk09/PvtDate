@@ -16,7 +16,7 @@ import sys
 import zipfile
 
 EXPECT_PKG = "com.pvtdate.app"
-EXPECT_VERSION = "1.1.0"
+EXPECT_VERSION = "1.1.1"
 EXPECT_PERMS = {
     "android.permission.INTERNET",
     "android.permission.ACCESS_NETWORK_STATE",

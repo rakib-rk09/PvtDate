@@ -7,7 +7,7 @@ cd "$ROOT"
 echo "==> web app logic tests"
 qjs --std app/tools/test_web.js index.html
 
-APK="app/output/pvtdate-1.1.0-release.apk"
+APK="app/output/pvtdate-1.1.1-release.apk"
 if [ -f "$APK" ]; then
     echo
     echo "==> release APK verification"

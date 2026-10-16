@@ -147,7 +147,7 @@ function assert(cond, msg) {
 
 const P = globalThis.PVTDATE;
 assert(!!P, "PVTDATE API exposed");
-assert(P.version === "1.1.0", "version is 1.1.0");
+assert(P.version === "1.1.1", "version is 1.1.1");
 assert(typeof P._store === "object", "store exposed for tests");
 
 const S = P._store;
@@ -182,7 +182,7 @@ assert(localStorage.getItem("pvtdate.att.2026-10-16") === null, "legacy keys rem
 
 // version comparison
 assert(P._cmpVersion("v1.2.0", "1.1.0") === 1, "cmpVersion detects newer");
-assert(P._cmpVersion("1.1.0", "1.1.0") === 0, "cmpVersion equal");
+assert(P._cmpVersion("1.1.1", "1.1.1") === 0, "cmpVersion equal");
 assert(P._cmpVersion("1.0.9", "1.1.0") === -1, "cmpVersion older");
 
 // corrupt data resilience

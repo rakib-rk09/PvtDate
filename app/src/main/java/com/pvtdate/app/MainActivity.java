@@ -42,11 +42,13 @@ public class MainActivity extends Activity {
     private static final String WEATHER_HOST = "wttr.in";
     private static final String API_HOST = "api.github.com";
     private static final String USER_AGENT =
-            "Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + ") AppleWebKit/537.36 (KHTML, like Gecko) pvtdate/1.1.0";
+            "Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + ") AppleWebKit/537.36 (KHTML, like Gecko) pvtdate/1.1.1";
     private static final int CONNECT_TIMEOUT_MS = 12000;
     private static final int MAX_PROXY_BYTES = 4 * 1024 * 1024;
+    private static final int REQ_WRITE_STORAGE = 1001;
 
     private WebView webView;
+    private Runnable pendingStorageAction;
 
     @SuppressWarnings("SetJavaScriptEnabled")
     @Override
@@ -279,6 +281,32 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void writeBackup(final String json, final String fileName) {
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                String safe = sanitize(fileName);
+                if (safe == null || safe.isEmpty()) safe = "pvtdate-backup.json";
+                File dir = new File(Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS), "PvtDate");
+                if (!dir.exists() && !dir.mkdirs()) throw new IOException("no dir");
+                File f = new File(dir, safe);
+                FileOutputStream fos = new FileOutputStream(f);
+                fos.write(json.getBytes(StandardCharsets.UTF_8));
+                fos.flush();
+                fos.close();
+                ok = true;
+            } catch (Exception e) {
+                ok = false;
+            }
+            final boolean success = ok;
+            runOnUiThread(() -> {
+                if (success) toast("Backup saved to Downloads/PvtDate");
+                else toast("Couldn't save backup");
+            });
+        }).start();
+    }
+
     private static String guessName(String url, String contentDisposition) {
         if (contentDisposition != null) {
             String[] parts = contentDisposition.split("filename=");
@@ -359,12 +387,42 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show());
     }
 
+    /**
+     * Runs {@code action} immediately on API 29+ (scoped storage) or when
+     * WRITE_EXTERNAL_STORAGE is already granted; otherwise asks for it first.
+     */
+    private void withStoragePermission(Runnable action) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                || checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                   == PackageManager.PERMISSION_GRANTED) {
+            action.run();
+            return;
+        }
+        pendingStorageAction = action;
+        requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                REQ_WRITE_STORAGE);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_WRITE_STORAGE) {
+            Runnable action = pendingStorageAction;
+            pendingStorageAction = null;
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                if (action != null) action.run();
+            } else {
+                toast("Storage permission is needed to save files");
+            }
+        }
+    }
+
     private String appVersionName() {
         try {
             PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
-            return info.versionName == null ? "1.1.0" : info.versionName;
+            return info.versionName == null ? "1.1.1" : info.versionName;
         } catch (PackageManager.NameNotFoundException e) {
-            return "1.1.0";
+            return "1.1.1";
         }
     }
 
@@ -405,35 +463,13 @@ public class MainActivity extends Activity {
         public void downloadApk(String url, String fileName) {
             if (url == null) return;
             final String name = (fileName == null || fileName.isEmpty()) ? "pvtdate.apk" : fileName;
-            runOnUiThread(() -> startDownload(url, name));
+            runOnUiThread(() -> withStoragePermission(() -> startDownload(url, name)));
         }
 
         @JavascriptInterface
         public void saveBackup(String json, String fileName) {
             if (json == null) return;
-            new Thread(() -> {
-                boolean ok = false;
-                try {
-                    String safe = sanitize(fileName);
-                    if (safe == null || safe.isEmpty()) safe = "pvtdate-backup.json";
-                    File dir = new File(Environment.getExternalStoragePublicDirectory(
-                            Environment.DIRECTORY_DOWNLOADS), "PvtDate");
-                    if (!dir.exists() && !dir.mkdirs()) throw new IOException("no dir");
-                    File f = new File(dir, safe);
-                    FileOutputStream fos = new FileOutputStream(f);
-                    fos.write(json.getBytes(StandardCharsets.UTF_8));
-                    fos.flush();
-                    fos.close();
-                    ok = true;
-                } catch (Exception e) {
-                    ok = false;
-                }
-                final boolean success = ok;
-                runOnUiThread(() -> {
-                    if (success) toast("Backup saved to Downloads/PvtDate");
-                    else toast("Couldn't save backup");
-                });
-            }).start();
+            runOnUiThread(() -> withStoragePermission(() -> writeBackup(json, fileName)));
         }
 
         @JavascriptInterface

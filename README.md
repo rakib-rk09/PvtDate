@@ -10,7 +10,7 @@ handles downloads, backups, sharing and update checks.
 | | |
 |---|---|
 | **Package** | `com.pvtdate.app` |
-| **Version** | 1.1.0 |
+| **Version** | 1.1.1 |
 | **Min Android** | 7.0 (API 24) |
 | **Target Android** | 15 (API 35) |
 | **Size** | ~80 KB |
@@ -45,7 +45,7 @@ The app is signed; future updates install over the top of the existing app and
 keep your data. To verify the download manually:
 
 ```bash
-apksigner verify --print-certs pvtdate-1.1.0-release.apk
+apksigner verify --print-certs pvtdate-1.1.1-release.apk
 # SHA-256: 39420458bbc5909fde9f34295635814f2da5ef98d02f7b3db093eb190564a622
 ```
 
@@ -82,7 +82,7 @@ keytool -genkeypair -v -keystore ~/.pvtdate/pvtdate.keystore \
 # put the keystore password (no newline) in ~/.pvtdate/keystore.pass
 
 ./app/build.sh
-# -> app/output/pvtdate-1.1.0-release.apk  and  app/output/pvtdate.apk
+# -> app/output/pvtdate-1.1.1-release.apk  and  app/output/pvtdate.apk
 ```
 
 Override signing without touching the repo:
@@ -101,10 +101,10 @@ PVTDATE_KEY_ALIAS=pvtdate \
 qjs --std app/tools/test_web.js index.html
 
 # 2) static verification of a built APK (permissions, alignment, contents…)
-python3 app/tools/verify_release.py app/output/pvtdate-1.1.0-release.apk index.html
+python3 app/tools/verify_release.py app/output/pvtdate-1.1.1-release.apk index.html
 
 # 3) signature
-apksigner verify -v app/output/pvtdate-1.1.0-release.apk
+apksigner verify -v app/output/pvtdate-1.1.1-release.apk
 ```
 
 The web test suite covers persistence, legacy‑data migration, input validation,
